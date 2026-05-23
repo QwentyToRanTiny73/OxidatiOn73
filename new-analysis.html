@@ -1,0 +1,203 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#FAFAF7">
+  <title>Новый анализ — Журнал лаборатории</title>
+
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=Lora:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="stylesheet" href="css/main.css">
+</head>
+<body>
+  <header class="appbar">
+    <a href="dashboard.html" class="brand">Журнал лаборатории</a>
+    <nav style="display:flex; gap:0.25rem;">
+      <a href="sample.html" class="btn btn-ghost" style="padding:0 0.75rem;">Образцы</a>
+      <a href="so2-calculator.html" class="btn btn-ghost" style="padding:0 0.75rem;">SO₂</a>
+      <a href="settings.html" class="btn btn-ghost" style="padding:0 0.75rem;"><i data-lucide="settings"></i></a>
+    </nav>
+  </header>
+
+  <main class="container" style="max-width: 760px;"
+        x-data="analysisForm()" x-cloak>
+    <a href="dashboard.html" class="btn btn-ghost" style="padding:0 0.5rem; margin-bottom:0.5rem;"><i data-lucide="arrow-left"></i> Назад</a>
+
+    <h1 style="margin: 0 0 1rem;">Новый анализ</h1>
+
+    <div class="card" style="margin-bottom:1rem;">
+      <h2 style="margin: 0 0 0.75rem;">Образец</h2>
+      <div style="display:grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 0.75rem;">
+        <div>
+          <label class="field-label">Образец</label>
+          <select class="field" id="sample-select">
+            <option value="">— выберите —</option>
+            <!-- список заполнится на шаге 4 -->
+          </select>
+        </div>
+        <div>
+          <label class="field-label">Тип вина</label>
+          <select class="field" x-model="wineType">
+            <option value="white">Белое сухое</option>
+            <option value="white-sweet">Белое сладкое</option>
+            <option value="red">Красное сухое</option>
+            <option value="rose">Розовое</option>
+            <option value="orange">Оранжевое</option>
+            <option value="pet-nat">Pet-nat</option>
+            <option value="sparkling">Игристое</option>
+          </select>
+        </div>
+        <div>
+          <label class="field-label">Объём ёмкости, л</label>
+          <input class="field num" type="number" step="0.1" min="0" x-model.number="volume">
+        </div>
+      </div>
+    </div>
+
+    <div class="card" style="margin-bottom:1rem;">
+      <h2 style="margin: 0 0 0.75rem;">Показатели</h2>
+      <div style="display:grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 0.75rem;">
+        <div>
+          <label class="field-label">pH *</label>
+          <input class="field num" type="number" step="0.01" min="2.5" max="4.5" required x-model.number="ph">
+        </div>
+        <div>
+          <label class="field-label">Свободный SO₂, мг/л *</label>
+          <input class="field num" type="number" step="1" min="0" required x-model.number="freeSO2">
+        </div>
+        <div>
+          <label class="field-label">Молекулярный SO₂, мг/л</label>
+          <input class="field num"
+                 readonly
+                 :value="molecular !== null ? molecular.toFixed(2) : '—'"
+                 :class="{
+                   'value-ok':   status === 'ok',
+                   'value-warn': status === 'warn',
+                   'value-bad':  status === 'bad'
+                 }">
+        </div>
+        <div>
+          <label class="field-label">Общий SO₂, мг/л</label>
+          <input class="field num" type="number" step="1" min="0" x-model.number="totalSO2">
+        </div>
+        <div>
+          <label class="field-label">Титруемая кислотность, г/л</label>
+          <input class="field num" type="number" step="0.1" min="0">
+        </div>
+        <div>
+          <label class="field-label">Летучая кислотность, г/л</label>
+          <input class="field num" type="number" step="0.01" min="0" x-model.number="va">
+        </div>
+        <div>
+          <label class="field-label">Алкоголь, % об</label>
+          <input class="field num" type="number" step="0.1" min="0">
+        </div>
+        <div>
+          <label class="field-label">Остаточный сахар, г/л</label>
+          <input class="field num" type="number" step="0.1" min="0">
+        </div>
+        <div>
+          <label class="field-label">Температура, °C</label>
+          <input class="field num" type="number" step="0.1">
+        </div>
+      </div>
+    </div>
+
+    <div class="card" style="margin-bottom:1rem;">
+      <h2 style="margin: 0 0 0.75rem;">Рекомендации</h2>
+      <template x-if="status === 'unknown'">
+        <p style="color:var(--text-muted); margin:0;">Введите pH и свободный SO₂ для расчёта.</p>
+      </template>
+
+      <template x-if="status === 'ok'">
+        <div class="alert alert-green">Молекулярный SO₂ в норме для выбранного типа вина.</div>
+      </template>
+
+      <template x-if="status === 'warn' || status === 'bad'">
+        <div :class="status === 'bad' ? 'alert alert-red' : 'alert alert-yellow'" style="margin-bottom:0.5rem;">
+          <strong x-text="status === 'bad' ? 'Риск окисления.' : 'Ниже целевого диапазона.'"></strong>
+          Целевой молекулярный SO₂: <span class="num" x-text="targetRange"></span> мг/л.
+        </div>
+      </template>
+
+      <template x-if="kmbsDose !== null && kmbsDose > 0">
+        <div class="alert alert-yellow">
+          Чтобы поднять молекулярный SO₂ до нижней границы, нужно добавить
+          <strong class="num" x-text="deltaFree.toFixed(0)"></strong> мг/л свободного SO₂, что соответствует
+          <strong class="num" x-text="kmbsDose.toFixed(2)"></strong> г метабисульфита калия (KMBS) на <span class="num" x-text="volume"></span> л.
+        </div>
+      </template>
+
+      <template x-if="vaStatus === 'warn' || vaStatus === 'bad'">
+        <div :class="vaStatus === 'bad' ? 'alert alert-red' : 'alert alert-yellow'" style="margin-top:0.5rem;">
+          Летучая кислотность повышена (<span class="num" x-text="va"></span> г/л).
+          Возможна начальная стадия порчи. Проверьте санитарию ёмкости, температуру и уровень SO₂.
+        </div>
+      </template>
+    </div>
+
+    <div style="display:flex; gap:0.5rem; justify-content:flex-end; flex-wrap:wrap;">
+      <a href="dashboard.html" class="btn btn-secondary">Отмена</a>
+      <button class="btn btn-primary" type="button" @click="save()">Сохранить анализ</button>
+    </div>
+  </main>
+
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="https://unpkg.com/lucide@latest/dist/umd/lucide.min.js"></script>
+  <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js"></script>
+  <script src="js/supabase-client.js"></script>
+  <script src="js/auth.js"></script>
+  <script src="js/so2-logic.js"></script>
+  <script src="js/analyses.js"></script>
+  <script>
+    document.addEventListener('DOMContentLoaded', () => {
+      if (window.lucide) window.lucide.createIcons();
+      requireAuth();
+    });
+
+    function analysisForm() {
+      return {
+        wineType: 'white',
+        volume: 100,
+        ph: null,
+        freeSO2: null,
+        totalSO2: null,
+        va: null,
+
+        get molecular() {
+          return window.SO2 ? window.SO2.molecular(this.freeSO2, this.ph) : null;
+        },
+        get status() {
+          if (this.molecular === null) return 'unknown';
+          return window.SO2.status(this.molecular, this.wineType);
+        },
+        get vaStatus() {
+          return window.SO2 ? window.SO2.vaStatus(this.va) : 'unknown';
+        },
+        get targetRange() {
+          const t = window.SO2 && window.SO2.TARGETS[this.wineType];
+          return t ? `${t.min}–${t.max}` : '—';
+        },
+        get deltaFree() {
+          const t = window.SO2 && window.SO2.TARGETS[this.wineType];
+          if (!t || this.ph == null || this.freeSO2 == null) return 0;
+          const targetFree = window.SO2.freeForMolecular(t.min, this.ph);
+          return Math.max(0, targetFree - this.freeSO2);
+        },
+        get kmbsDose() {
+          if (!this.deltaFree || !this.volume) return null;
+          return window.SO2.kmbsGrams(this.deltaFree, this.volume);
+        },
+
+        save() {
+          alert('Сохранение будет реализовано на шаге 4.');
+        }
+      };
+    }
+  </script>
+</body>
+</html>

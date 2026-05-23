@@ -1,0 +1,76 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#FAFAF7">
+  <title>Дашборд — Журнал лаборатории</title>
+
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=Lora:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="stylesheet" href="css/main.css">
+</head>
+<body>
+  <header class="appbar">
+    <a href="dashboard.html" class="brand">Журнал лаборатории</a>
+    <nav style="display:flex; gap:0.25rem;">
+      <a href="sample.html" class="btn btn-ghost" style="padding:0 0.75rem;">Образцы</a>
+      <a href="so2-calculator.html" class="btn btn-ghost" style="padding:0 0.75rem;">SO₂</a>
+      <a href="settings.html" class="btn btn-ghost" style="padding:0 0.75rem;"><i data-lucide="settings"></i></a>
+    </nav>
+  </header>
+
+  <main class="container">
+    <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:1rem; gap:0.5rem; flex-wrap:wrap;">
+      <h1 style="margin:0;">Дашборд</h1>
+      <a href="new-analysis.html" class="btn btn-primary"><i data-lucide="plus"></i> Новый анализ</a>
+    </div>
+
+    <section id="alerts" style="display:flex; flex-direction:column; gap:0.5rem; margin-bottom:1.5rem;">
+      <!-- Алерты заполняются на шаге 5 -->
+    </section>
+
+    <section style="margin-bottom:1.5rem;">
+      <input class="field" type="search" placeholder="Поиск по коду образца, сорту, году…" id="search">
+    </section>
+
+    <section>
+      <h2 style="margin: 0 0 0.75rem;">Последние анализы</h2>
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>Дата</th>
+              <th>Образец</th>
+              <th>Сорт</th>
+              <th class="num">pH</th>
+              <th class="num">Своб. SO₂</th>
+              <th class="num">Мол. SO₂</th>
+              <th class="num">VA</th>
+            </tr>
+          </thead>
+          <tbody id="recent-analyses">
+            <tr><td colspan="7" style="text-align:center; color:var(--text-muted); padding: 2rem;">Загрузка… (шаг 4)</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+  </main>
+
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="https://unpkg.com/lucide@latest/dist/umd/lucide.min.js"></script>
+  <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js"></script>
+  <script src="js/supabase-client.js"></script>
+  <script src="js/auth.js"></script>
+  <script src="js/analyses.js"></script>
+  <script>
+    document.addEventListener('DOMContentLoaded', () => {
+      if (window.lucide) window.lucide.createIcons();
+      requireAuth();
+    });
+  </script>
+</body>
+</html>

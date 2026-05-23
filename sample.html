@@ -1,0 +1,172 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#FAFAF7">
+  <title>Образцы — Журнал лаборатории</title>
+
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=Lora:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="stylesheet" href="css/main.css">
+</head>
+<body>
+  <header class="appbar">
+    <a href="dashboard.html" class="brand">Журнал лаборатории</a>
+    <nav style="display:flex; gap:0.25rem;">
+      <a href="sample.html" class="btn btn-ghost" style="padding:0 0.75rem;">Образцы</a>
+      <a href="so2-calculator.html" class="btn btn-ghost" style="padding:0 0.75rem;">SO₂</a>
+      <a href="settings.html" class="btn btn-ghost" style="padding:0 0.75rem;"><i data-lucide="settings"></i></a>
+    </nav>
+  </header>
+
+  <main class="container">
+    <!-- Режим списка: страница без ?id= показывает все образцы. -->
+    <section id="list-view">
+      <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:1rem; gap:0.5rem; flex-wrap:wrap;">
+        <h1 style="margin:0;">Образцы</h1>
+        <a href="new-analysis.html" class="btn btn-primary"><i data-lucide="plus"></i> Новый анализ</a>
+      </div>
+
+      <div style="display:flex; gap:0.5rem; flex-wrap:wrap; margin-bottom:1rem;">
+        <select class="field" id="filter-type" style="width:auto; min-width:160px;">
+          <option value="">Все типы</option>
+          <option value="white">Белое</option>
+          <option value="red">Красное</option>
+          <option value="rose">Розовое</option>
+          <option value="orange">Оранжевое</option>
+          <option value="pet-nat">Pet-nat</option>
+          <option value="sparkling">Игристое</option>
+        </select>
+        <input class="field" id="filter-vintage" type="number" placeholder="Винтаж" style="width:auto; max-width:120px;">
+        <select class="field" id="filter-stage" style="width:auto; min-width:200px;">
+          <option value="">Все стадии</option>
+          <option value="must">Сусло</option>
+          <option value="fermentation">Брожение</option>
+          <option value="post-fermentation">После брожения</option>
+          <option value="aging">Выдержка</option>
+          <option value="before-bottling">Перед розливом</option>
+          <option value="bottled">В бутылке</option>
+        </select>
+      </div>
+
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>Код</th>
+              <th>Сорт</th>
+              <th>Винтаж</th>
+              <th>Тип</th>
+              <th>Стадия</th>
+              <th>Ёмкость</th>
+              <th class="num">Объём, л</th>
+              <th>Посл. анализ</th>
+            </tr>
+          </thead>
+          <tbody id="samples-list">
+            <tr><td colspan="8" style="text-align:center; color:var(--text-muted); padding: 2rem;">Загрузка… (шаг 4)</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <!-- Режим карточки: показывается при ?id=<uuid>. -->
+    <section id="card-view" hidden>
+      <a href="sample.html" class="btn btn-ghost" style="padding:0 0.5rem; margin-bottom:0.5rem;"><i data-lucide="arrow-left"></i> К списку</a>
+
+      <div style="display:flex; align-items:flex-start; justify-content:space-between; gap:1rem; flex-wrap:wrap; margin-bottom:1rem;">
+        <div>
+          <h1 style="margin:0;" id="sample-title">Образец</h1>
+          <p style="color:var(--text-muted); margin:0.25rem 0 0;" id="sample-subtitle"></p>
+        </div>
+        <div style="display:flex; gap:0.5rem; flex-wrap:wrap;">
+          <a href="#" class="btn btn-secondary" id="new-analysis-here"><i data-lucide="plus"></i> Новый анализ</a>
+          <button class="btn btn-secondary" id="export-pdf"><i data-lucide="file-down"></i> PDF</button>
+        </div>
+      </div>
+
+      <div class="card" style="margin-bottom:1rem;">
+        <h2 style="margin: 0 0 0.75rem;">Метаданные</h2>
+        <div id="sample-meta" style="display:grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 0.75rem;">
+          <!-- заполнится на шаге 4 -->
+        </div>
+      </div>
+
+      <div class="card" style="margin-bottom:1rem;">
+        <h2 style="margin: 0 0 0.75rem;">Динамика показателей</h2>
+        <canvas id="trends-chart" height="240"></canvas>
+        <!-- Реализация на шаге 7 -->
+      </div>
+
+      <div class="card" style="margin-bottom:1rem;">
+        <h2 style="margin: 0 0 0.75rem;">Анализы</h2>
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>Дата</th>
+                <th class="num">pH</th>
+                <th class="num">TA</th>
+                <th class="num">VA</th>
+                <th class="num">Алк.</th>
+                <th class="num">Своб. SO₂</th>
+                <th class="num">Мол. SO₂</th>
+                <th>Аналитик</th>
+              </tr>
+            </thead>
+            <tbody id="analyses-list">
+              <tr><td colspan="8" style="text-align:center; color:var(--text-muted); padding: 1.5rem;">Загрузка… (шаг 4)</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <div class="card">
+        <h2 style="margin: 0 0 0.75rem;">История добавок SO₂</h2>
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>Дата</th>
+                <th class="num">Доб. SO₂, мг/л</th>
+                <th class="num">KMBS, г</th>
+                <th>Причина</th>
+              </tr>
+            </thead>
+            <tbody id="so2-history">
+              <tr><td colspan="4" style="text-align:center; color:var(--text-muted); padding: 1.5rem;">Загрузка… (шаг 4)</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/jspdf@2.5.1/dist/jspdf.umd.min.js"></script>
+  <script src="https://unpkg.com/lucide@latest/dist/umd/lucide.min.js"></script>
+  <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js"></script>
+  <script src="js/supabase-client.js"></script>
+  <script src="js/auth.js"></script>
+  <script src="js/so2-logic.js"></script>
+  <script src="js/analyses.js"></script>
+  <script>
+    document.addEventListener('DOMContentLoaded', () => {
+      if (window.lucide) window.lucide.createIcons();
+      requireAuth();
+      const id = new URLSearchParams(location.search).get('id');
+      if (id) {
+        document.getElementById('list-view').hidden = true;
+        document.getElementById('card-view').hidden = false;
+        const link = document.getElementById('new-analysis-here');
+        if (link) link.href = `new-analysis.html?sample=${encodeURIComponent(id)}`;
+      }
+    });
+  </script>
+</body>
+</html>

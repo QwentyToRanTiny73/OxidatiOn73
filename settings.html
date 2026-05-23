@@ -1,0 +1,89 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#FAFAF7">
+  <title>Настройки — Журнал лаборатории</title>
+
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=Lora:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="stylesheet" href="css/main.css">
+</head>
+<body>
+  <header class="appbar">
+    <a href="dashboard.html" class="brand">Журнал лаборатории</a>
+    <nav style="display:flex; gap:0.25rem;">
+      <a href="sample.html" class="btn btn-ghost" style="padding:0 0.75rem;">Образцы</a>
+      <a href="so2-calculator.html" class="btn btn-ghost" style="padding:0 0.75rem;">SO₂</a>
+      <a href="settings.html" class="btn btn-ghost" style="padding:0 0.75rem;"><i data-lucide="settings"></i></a>
+    </nav>
+  </header>
+
+  <main class="container" style="max-width: 760px;">
+    <h1 style="margin: 0 0 1rem;">Настройки</h1>
+
+    <div class="card" style="margin-bottom:1rem;">
+      <h2 style="margin: 0 0 0.75rem;">Винодельня</h2>
+      <div style="display:grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 0.75rem;">
+        <div>
+          <label class="field-label">Название</label>
+          <input class="field" type="text" id="winery-name">
+        </div>
+        <div>
+          <label class="field-label">Контактный email</label>
+          <input class="field" type="email" id="winery-email">
+        </div>
+        <div>
+          <label class="field-label">Тип хозяйства</label>
+          <select class="field" id="winery-type">
+            <option value="estate">Частное хозяйство</option>
+            <option value="garage">Гаражное виноделие</option>
+            <option value="cooperative">Кооператив</option>
+            <option value="other">Другое</option>
+          </select>
+        </div>
+      </div>
+      <div style="margin-top:1rem; display:flex; justify-content:flex-end;">
+        <button class="btn btn-primary" type="button">Сохранить</button>
+      </div>
+    </div>
+
+    <div class="card" style="margin-bottom:1rem;">
+      <h2 style="margin: 0 0 0.75rem;">Пользователи</h2>
+      <div class="table-wrap" style="margin-bottom: 0.75rem;">
+        <table>
+          <thead>
+            <tr><th>Email</th><th>Роль</th><th></th></tr>
+          </thead>
+          <tbody id="users-list">
+            <tr><td colspan="3" style="text-align:center; color:var(--text-muted); padding: 1.5rem;">Загрузка… (шаг 3)</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <button class="btn btn-secondary" type="button"><i data-lucide="user-plus"></i> Пригласить пользователя</button>
+    </div>
+
+    <div class="card">
+      <h2 style="margin: 0 0 0.75rem;">Аккаунт</h2>
+      <button class="btn btn-secondary" type="button" id="signout-btn"><i data-lucide="log-out"></i> Выйти</button>
+    </div>
+  </main>
+
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="https://unpkg.com/lucide@latest/dist/umd/lucide.min.js"></script>
+  <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js"></script>
+  <script src="js/supabase-client.js"></script>
+  <script src="js/auth.js"></script>
+  <script>
+    document.addEventListener('DOMContentLoaded', () => {
+      if (window.lucide) window.lucide.createIcons();
+      requireAuth();
+      document.getElementById('signout-btn')?.addEventListener('click', () => signOut().catch(console.error));
+    });
+  </script>
+</body>
+</html>

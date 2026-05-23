@@ -1,0 +1,166 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#FAFAF7">
+  <title>Модуль SO₂ — Журнал лаборатории</title>
+
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=Lora:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="stylesheet" href="css/main.css">
+</head>
+<body>
+  <header class="appbar">
+    <a href="dashboard.html" class="brand">Журнал лаборатории</a>
+    <nav style="display:flex; gap:0.25rem;">
+      <a href="sample.html" class="btn btn-ghost" style="padding:0 0.75rem;">Образцы</a>
+      <a href="so2-calculator.html" class="btn btn-ghost" style="padding:0 0.75rem;">SO₂</a>
+      <a href="settings.html" class="btn btn-ghost" style="padding:0 0.75rem;"><i data-lucide="settings"></i></a>
+    </nav>
+  </header>
+
+  <main class="container" x-data="so2Page()" x-cloak>
+    <h1 style="margin: 0 0 0.25rem;">Модуль SO₂</h1>
+    <p style="color:var(--text-muted); margin: 0 0 1.5rem;">
+      Расчёт молекулярного SO₂, целевого свободного SO₂ и навески KMBS.
+    </p>
+
+    <div style="display:grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 1rem; margin-bottom: 1.5rem;">
+
+      <!-- Калькулятор 1: pH + желаемый молекулярный → целевой свободный -->
+      <div class="card">
+        <h3 style="margin: 0 0 0.75rem;">Целевой свободный SO₂</h3>
+        <p style="color:var(--text-muted); font-size:0.875rem; margin:0 0 0.75rem;">
+          Введите pH и желаемый молекулярный SO₂.
+        </p>
+        <label class="field-label">pH</label>
+        <input class="field num" type="number" step="0.01" x-model.number="c1.ph" style="margin-bottom:0.75rem;">
+        <label class="field-label">Желаемый молекулярный SO₂, мг/л</label>
+        <input class="field num" type="number" step="0.05" x-model.number="c1.mol" style="margin-bottom:0.75rem;">
+        <div class="alert" :class="c1.result !== null ? 'alert-green' : ''" style="border-color: var(--accent-olive);">
+          Целевой свободный SO₂:
+          <strong class="num" x-text="c1.result !== null ? c1.result.toFixed(0) + ' мг/л' : '—'"></strong>
+        </div>
+      </div>
+
+      <!-- Калькулятор 2: pH + свободный → молекулярный -->
+      <div class="card">
+        <h3 style="margin: 0 0 0.75rem;">Молекулярный SO₂</h3>
+        <p style="color:var(--text-muted); font-size:0.875rem; margin:0 0 0.75rem;">
+          Введите pH и измеренный свободный SO₂.
+        </p>
+        <label class="field-label">pH</label>
+        <input class="field num" type="number" step="0.01" x-model.number="c2.ph" style="margin-bottom:0.75rem;">
+        <label class="field-label">Свободный SO₂, мг/л</label>
+        <input class="field num" type="number" step="1" x-model.number="c2.free" style="margin-bottom:0.75rem;">
+        <div class="alert" style="border-color: var(--accent-olive);">
+          Молекулярный SO₂:
+          <strong class="num" x-text="c2.result !== null ? c2.result.toFixed(2) + ' мг/л' : '—'"></strong>
+        </div>
+      </div>
+
+      <!-- Калькулятор 3: дозировка KMBS -->
+      <div class="card">
+        <h3 style="margin: 0 0 0.75rem;">Дозировка KMBS</h3>
+        <p style="color:var(--text-muted); font-size:0.875rem; margin:0 0 0.75rem;">
+          От текущего до целевого свободного SO₂.
+        </p>
+        <label class="field-label">Текущий свободный SO₂, мг/л</label>
+        <input class="field num" type="number" step="1" x-model.number="c3.current" style="margin-bottom:0.75rem;">
+        <label class="field-label">Целевой свободный SO₂, мг/л</label>
+        <input class="field num" type="number" step="1" x-model.number="c3.target" style="margin-bottom:0.75rem;">
+        <label class="field-label">Объём, л</label>
+        <input class="field num" type="number" step="0.1" x-model.number="c3.volume" style="margin-bottom:0.75rem;">
+        <div class="alert" style="border-color: var(--accent-olive);">
+          Навеска KMBS:
+          <strong class="num" x-text="c3.result !== null ? c3.result.toFixed(2) + ' г' : '—'"></strong>
+        </div>
+      </div>
+    </div>
+
+    <div class="card" style="margin-bottom:1rem;">
+      <h2 style="margin: 0 0 0.75rem;">Целевые значения молекулярного SO₂</h2>
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>Тип вина</th>
+              <th class="num">Мин., мг/л</th>
+              <th class="num">Макс., мг/л</th>
+            </tr>
+          </thead>
+          <tbody id="targets-table">
+            <!-- заполнится скриптом ниже -->
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <div class="card">
+      <h2 style="margin: 0 0 0.5rem;">Что такое молекулярный SO₂</h2>
+      <p style="margin:0 0 0.5rem;">
+        Двуокись серы в вине существует в трёх формах: связанной, свободной (бисульфит и сульфит)
+        и молекулярной (растворённый SO₂). Антимикробной и антиоксидантной активностью обладает именно
+        <strong>молекулярная форма</strong> — это меньше 10% от свободного SO₂ и сильно зависит от pH.
+      </p>
+      <p style="margin:0 0 0.5rem;">
+        Чем ниже pH, тем больше доля молекулярного SO₂ при одном и том же свободном.
+        Поэтому два вина с одинаковым свободным SO₂ могут защищаться по-разному.
+      </p>
+      <p style="margin:0; color:var(--text-muted); font-size:0.875rem;">
+        Формула: molecular = free / (1 + 10<sup>pH − 1.81</sup>).
+      </p>
+    </div>
+  </main>
+
+  <script src="https://unpkg.com/lucide@latest/dist/umd/lucide.min.js"></script>
+  <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js"></script>
+  <script src="js/so2-logic.js"></script>
+  <script>
+    document.addEventListener('DOMContentLoaded', () => {
+      if (window.lucide) window.lucide.createIcons();
+
+      // Заполнить таблицу целевых значений из SO2.TARGETS
+      const tbody = document.getElementById('targets-table');
+      if (tbody && window.SO2) {
+        tbody.innerHTML = Object.values(window.SO2.TARGETS).map(t => `
+          <tr>
+            <td>${t.label}</td>
+            <td class="num">${t.min.toFixed(1)}</td>
+            <td class="num">${t.max.toFixed(1)}</td>
+          </tr>
+        `).join('');
+      }
+    });
+
+    function so2Page() {
+      return {
+        c1: {
+          ph: 3.4, mol: 0.8,
+          get result() {
+            return window.SO2 ? window.SO2.freeForMolecular(this.mol, this.ph) : null;
+          }
+        },
+        c2: {
+          ph: 3.4, free: 30,
+          get result() {
+            return window.SO2 ? window.SO2.molecular(this.free, this.ph) : null;
+          }
+        },
+        c3: {
+          current: 20, target: 35, volume: 100,
+          get result() {
+            const delta = (this.target || 0) - (this.current || 0);
+            if (delta <= 0 || !this.volume) return null;
+            return window.SO2 ? window.SO2.kmbsGrams(delta, this.volume) : null;
+          }
+        }
+      };
+    }
+  </script>
+</body>
+</html>

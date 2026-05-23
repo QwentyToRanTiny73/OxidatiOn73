@@ -1,0 +1,54 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#FAFAF7">
+  <title>Вход — Журнал лаборатории</title>
+
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=Lora:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="stylesheet" href="css/main.css">
+</head>
+<body>
+  <main class="container" style="max-width: 420px; padding-top: 3rem;">
+    <div style="text-align:center; margin-bottom: 2rem;">
+      <h1 style="margin: 0;">Журнал лаборатории</h1>
+      <p style="color: var(--text-muted); margin: 0.25rem 0 0;">Для малых винодельческих хозяйств</p>
+    </div>
+
+    <div class="card" x-data="{ mode: 'login' }" x-cloak>
+      <div style="display:flex; gap:0.5rem; margin-bottom: 1.25rem;">
+        <button class="btn btn-ghost" :class="mode === 'login' ? 'btn-secondary' : ''" @click="mode = 'login'" style="flex:1;">Вход</button>
+        <button class="btn btn-ghost" :class="mode === 'signup' ? 'btn-secondary' : ''" @click="mode = 'signup'" style="flex:1;">Регистрация</button>
+      </div>
+
+      <form x-show="mode === 'login'" @submit.prevent="signIn({ email: $event.target.email.value, password: $event.target.password.value })">
+        <label class="field-label">Email</label>
+        <input class="field" name="email" type="email" required autocomplete="email" style="margin-bottom: 1rem;">
+        <label class="field-label">Пароль</label>
+        <input class="field" name="password" type="password" required autocomplete="current-password" style="margin-bottom: 1.25rem;">
+        <button class="btn btn-primary" type="submit" style="width:100%;">Войти</button>
+      </form>
+
+      <form x-show="mode === 'signup'" @submit.prevent="signUp({ wineryName: $event.target.winery.value, email: $event.target.email.value, password: $event.target.password.value })">
+        <label class="field-label">Название хозяйства</label>
+        <input class="field" name="winery" type="text" required style="margin-bottom: 1rem;">
+        <label class="field-label">Email</label>
+        <input class="field" name="email" type="email" required autocomplete="email" style="margin-bottom: 1rem;">
+        <label class="field-label">Пароль (мин. 8 символов)</label>
+        <input class="field" name="password" type="password" required minlength="8" autocomplete="new-password" style="margin-bottom: 1.25rem;">
+        <button class="btn btn-primary" type="submit" style="width:100%;">Создать аккаунт</button>
+      </form>
+    </div>
+  </main>
+
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js"></script>
+  <script src="js/supabase-client.js"></script>
+  <script src="js/auth.js"></script>
+</body>
+</html>
