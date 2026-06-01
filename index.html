@@ -14,41 +14,98 @@
   <link rel="stylesheet" href="css/main.css">
 </head>
 <body>
-  <main class="container" style="max-width: 420px; padding-top: 3rem;">
+  <main class="container" style="max-width: 420px; padding-top: 3rem;" x-data="loginPage()" x-cloak>
     <div style="text-align:center; margin-bottom: 2rem;">
       <h1 style="margin: 0;">Журнал лаборатории</h1>
       <p style="color: var(--text-muted); margin: 0.25rem 0 0;">Для малых винодельческих хозяйств</p>
     </div>
 
-    <div class="card" x-data="{ mode: 'login' }" x-cloak>
+    <div class="card">
       <div style="display:flex; gap:0.5rem; margin-bottom: 1.25rem;">
-        <button class="btn btn-ghost" :class="mode === 'login' ? 'btn-secondary' : ''" @click="mode = 'login'" style="flex:1;">Вход</button>
-        <button class="btn btn-ghost" :class="mode === 'signup' ? 'btn-secondary' : ''" @click="mode = 'signup'" style="flex:1;">Регистрация</button>
+        <button type="button" class="btn" :class="mode === 'login'  ? 'btn-secondary' : 'btn-ghost'" @click="mode='login';  err=''" style="flex:1;">Вход</button>
+        <button type="button" class="btn" :class="mode === 'signup' ? 'btn-secondary' : 'btn-ghost'" @click="mode='signup'; err=''" style="flex:1;">Регистрация</button>
       </div>
 
-      <form x-show="mode === 'login'" @submit.prevent="signIn({ email: $event.target.email.value, password: $event.target.password.value })">
+      <template x-if="err">
+        <div class="alert alert-red" style="margin-bottom: 1rem;" x-text="err"></div>
+      </template>
+
+      <form x-show="mode === 'login'" @submit.prevent="doLogin($event)">
         <label class="field-label">Email</label>
         <input class="field" name="email" type="email" required autocomplete="email" style="margin-bottom: 1rem;">
         <label class="field-label">Пароль</label>
         <input class="field" name="password" type="password" required autocomplete="current-password" style="margin-bottom: 1.25rem;">
-        <button class="btn btn-primary" type="submit" style="width:100%;">Войти</button>
+        <button class="btn btn-primary" type="submit" style="width:100%;" :disabled="busy">
+          <span x-text="busy ? 'Минуту…' : 'Войти'"></span>
+        </button>
       </form>
 
-      <form x-show="mode === 'signup'" @submit.prevent="signUp({ wineryName: $event.target.winery.value, email: $event.target.email.value, password: $event.target.password.value })">
+      <form x-show="mode === 'signup'" @submit.prevent="doSignup($event)">
         <label class="field-label">Название хозяйства</label>
         <input class="field" name="winery" type="text" required style="margin-bottom: 1rem;">
         <label class="field-label">Email</label>
         <input class="field" name="email" type="email" required autocomplete="email" style="margin-bottom: 1rem;">
         <label class="field-label">Пароль (мин. 8 символов)</label>
         <input class="field" name="password" type="password" required minlength="8" autocomplete="new-password" style="margin-bottom: 1.25rem;">
-        <button class="btn btn-primary" type="submit" style="width:100%;">Создать аккаунт</button>
+        <button class="btn btn-primary" type="submit" style="width:100%;" :disabled="busy">
+          <span x-text="busy ? 'Создаём…' : 'Создать аккаунт'"></span>
+        </button>
       </form>
+
+      <div style="margin-top: 1.25rem; padding-top: 1.25rem; border-top: 1px solid var(--border); text-align:center;">
+        <button type="button" class="btn btn-ghost" @click="doDemo()" :disabled="busy" style="width: 100%;">
+          Войти в демо-режим →
+        </button>
+        <p style="color: var(--text-muted); font-size: 0.8125rem; margin: 0.5rem 0 0;">
+          Готовые данные для ознакомления. Хранится только в этом браузере.
+        </p>
+      </div>
     </div>
+
+    <p style="text-align:center; color: var(--text-muted); font-size: 0.8125rem; margin-top: 1.5rem;">
+      Прототип. Данные сохраняются в localStorage этого браузера.
+    </p>
   </main>
 
-  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js"></script>
-  <script src="js/supabase-client.js"></script>
+  <script src="js/so2-logic.js"></script>
+  <script src="js/analyses.js"></script>
   <script src="js/auth.js"></script>
+  <script>
+    function loginPage() {
+      return {
+        mode: 'login',
+        err: '',
+        busy: false,
+
+        async doLogin(e) {
+          this.err = ''; this.busy = true;
+          try {
+            await signIn({ email: e.target.email.value, password: e.target.password.value });
+          } catch (ex) { this.err = ex.message; this.busy = false; }
+        },
+        async doSignup(e) {
+          this.err = ''; this.busy = true;
+          try {
+            await signUp({
+              wineryName: e.target.winery.value,
+              email: e.target.email.value,
+              password: e.target.password.value,
+            });
+          } catch (ex) { this.err = ex.message; this.busy = false; }
+        },
+        async doDemo() {
+          this.err = ''; this.busy = true;
+          try { await enterDemoMode(); }
+          catch (ex) { this.err = ex.message; this.busy = false; }
+        },
+      };
+    }
+
+    // Если уже залогинен — сразу на дашборд.
+    if (localStorage.getItem('oxidation73:session')) {
+      location.href = 'dashboard.html';
+    }
+  </script>
 </body>
 </html>

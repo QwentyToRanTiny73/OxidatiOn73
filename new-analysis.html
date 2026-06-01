@@ -13,7 +13,7 @@
   <script src="https://cdn.tailwindcss.com"></script>
   <link rel="stylesheet" href="css/main.css">
 </head>
-<body>
+<body x-data="analysisForm()" x-init="init()" x-cloak>
   <header class="appbar">
     <a href="dashboard.html" class="brand">Журнал лаборатории</a>
     <nav style="display:flex; gap:0.25rem;">
@@ -23,38 +23,82 @@
     </nav>
   </header>
 
-  <main class="container" style="max-width: 760px;"
-        x-data="analysisForm()" x-cloak>
+  <main class="container" style="max-width: 760px;">
     <a href="dashboard.html" class="btn btn-ghost" style="padding:0 0.5rem; margin-bottom:0.5rem;"><i data-lucide="arrow-left"></i> Назад</a>
-
     <h1 style="margin: 0 0 1rem;">Новый анализ</h1>
+
+    <template x-if="err">
+      <div class="alert alert-red" style="margin-bottom: 1rem;" x-text="err"></div>
+    </template>
 
     <div class="card" style="margin-bottom:1rem;">
       <h2 style="margin: 0 0 0.75rem;">Образец</h2>
-      <div style="display:grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 0.75rem;">
+
+      <div style="display:grid; grid-template-columns: 1fr; gap: 0.75rem;">
         <div>
-          <label class="field-label">Образец</label>
-          <select class="field" id="sample-select">
+          <label class="field-label">Выбрать образец</label>
+          <select class="field" x-model="sampleId" @change="onSampleChange()">
             <option value="">— выберите —</option>
-            <!-- список заполнится на шаге 4 -->
+            <option value="__new__">+ Создать новый образец</option>
+            <template x-for="s in samples" :key="s.id">
+              <option :value="s.id" x-text="s.sample_code + ' · ' + (s.variety || '—') + ' ' + (s.vintage || '')"></option>
+            </template>
           </select>
         </div>
-        <div>
-          <label class="field-label">Тип вина</label>
-          <select class="field" x-model="wineType">
-            <option value="white">Белое сухое</option>
-            <option value="white-sweet">Белое сладкое</option>
-            <option value="red">Красное сухое</option>
-            <option value="rose">Розовое</option>
-            <option value="orange">Оранжевое</option>
-            <option value="pet-nat">Pet-nat</option>
-            <option value="sparkling">Игристое</option>
-          </select>
+      </div>
+
+      <!-- Поля для нового образца -->
+      <div x-show="sampleId === '__new__'" style="margin-top: 1rem; padding-top: 1rem; border-top: 1px solid var(--border);">
+        <div style="display:grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 0.75rem;">
+          <div>
+            <label class="field-label">Код образца *</label>
+            <input class="field" type="text" x-model="newSample.sample_code" placeholder="напр. 2025-CS-01">
+          </div>
+          <div>
+            <label class="field-label">Сорт винограда</label>
+            <input class="field" type="text" x-model="newSample.variety" placeholder="напр. Каберне Совиньон">
+          </div>
+          <div>
+            <label class="field-label">Винтаж</label>
+            <input class="field num" type="number" min="1900" max="2100" x-model.number="newSample.vintage">
+          </div>
+          <div>
+            <label class="field-label">Тип вина</label>
+            <select class="field" x-model="wineType">
+              <option value="white">Белое сухое</option>
+              <option value="white-sweet">Белое сладкое</option>
+              <option value="red">Красное сухое</option>
+              <option value="rose">Розовое</option>
+              <option value="orange">Оранжевое</option>
+              <option value="pet-nat">Pet-nat</option>
+              <option value="sparkling">Игристое</option>
+            </select>
+          </div>
+          <div>
+            <label class="field-label">Стадия</label>
+            <select class="field" x-model="newSample.stage">
+              <option value="must">Сусло</option>
+              <option value="fermentation">Брожение</option>
+              <option value="post-fermentation">После брожения</option>
+              <option value="aging">Выдержка</option>
+              <option value="before-bottling">Перед розливом</option>
+              <option value="bottled">В бутылке</option>
+            </select>
+          </div>
+          <div>
+            <label class="field-label">Ёмкость</label>
+            <input class="field" type="text" x-model="newSample.vessel" placeholder="напр. Бочка №3">
+          </div>
+          <div>
+            <label class="field-label">Объём, л</label>
+            <input class="field num" type="number" step="0.1" min="0" x-model.number="volume">
+          </div>
         </div>
-        <div>
-          <label class="field-label">Объём ёмкости, л</label>
-          <input class="field num" type="number" step="0.1" min="0" x-model.number="volume">
-        </div>
+      </div>
+
+      <!-- Подсказка по выбранному образцу -->
+      <div x-show="selectedSample" style="margin-top: 0.75rem; color: var(--text-muted); font-size: 0.875rem;">
+        <span x-text="selectedSample ? `${wineTypeLabel} · ${selectedSample.vessel || '—'} · ${volume || '—'} л` : ''"></span>
       </div>
     </div>
 
@@ -71,14 +115,9 @@
         </div>
         <div>
           <label class="field-label">Молекулярный SO₂, мг/л</label>
-          <input class="field num"
-                 readonly
+          <input class="field num" readonly
                  :value="molecular !== null ? molecular.toFixed(2) : '—'"
-                 :class="{
-                   'value-ok':   status === 'ok',
-                   'value-warn': status === 'warn',
-                   'value-bad':  status === 'bad'
-                 }">
+                 :class="{ 'value-ok': status === 'ok', 'value-warn': status === 'warn', 'value-bad': status === 'bad' }">
         </div>
         <div>
           <label class="field-label">Общий SO₂, мг/л</label>
@@ -86,7 +125,7 @@
         </div>
         <div>
           <label class="field-label">Титруемая кислотность, г/л</label>
-          <input class="field num" type="number" step="0.1" min="0">
+          <input class="field num" type="number" step="0.1" min="0" x-model.number="ta">
         </div>
         <div>
           <label class="field-label">Летучая кислотность, г/л</label>
@@ -94,16 +133,24 @@
         </div>
         <div>
           <label class="field-label">Алкоголь, % об</label>
-          <input class="field num" type="number" step="0.1" min="0">
+          <input class="field num" type="number" step="0.1" min="0" x-model.number="alcohol">
         </div>
         <div>
           <label class="field-label">Остаточный сахар, г/л</label>
-          <input class="field num" type="number" step="0.1" min="0">
+          <input class="field num" type="number" step="0.1" min="0" x-model.number="rs">
         </div>
         <div>
           <label class="field-label">Температура, °C</label>
-          <input class="field num" type="number" step="0.1">
+          <input class="field num" type="number" step="0.1" x-model.number="temp">
         </div>
+        <div>
+          <label class="field-label">Аналитик</label>
+          <input class="field" type="text" x-model="analyst">
+        </div>
+      </div>
+      <div style="margin-top: 0.75rem;">
+        <label class="field-label">Заметки</label>
+        <input class="field" type="text" x-model="notes">
       </div>
     </div>
 
@@ -114,7 +161,7 @@
       </template>
 
       <template x-if="status === 'ok'">
-        <div class="alert alert-green">Молекулярный SO₂ в норме для выбранного типа вина.</div>
+        <div class="alert alert-green">Молекулярный SO₂ в норме для выбранного типа вина (целевой диапазон <span class="num" x-text="targetRange"></span> мг/л).</div>
       </template>
 
       <template x-if="status === 'warn' || status === 'bad'">
@@ -124,11 +171,12 @@
         </div>
       </template>
 
-      <template x-if="kmbsDose !== null && kmbsDose > 0">
+      <template x-if="kmbsDose !== null && kmbsDose > 0 && volume">
         <div class="alert alert-yellow">
           Чтобы поднять молекулярный SO₂ до нижней границы, нужно добавить
-          <strong class="num" x-text="deltaFree.toFixed(0)"></strong> мг/л свободного SO₂, что соответствует
-          <strong class="num" x-text="kmbsDose.toFixed(2)"></strong> г метабисульфита калия (KMBS) на <span class="num" x-text="volume"></span> л.
+          <strong class="num" x-text="deltaFree.toFixed(0)"></strong> мг/л свободного SO₂.
+          Навеска: <strong class="num" x-text="kmbsDose.toFixed(2)"></strong> г метабисульфита калия (KMBS)
+          на <span class="num" x-text="volume"></span> л.
         </div>
       </template>
 
@@ -142,60 +190,102 @@
 
     <div style="display:flex; gap:0.5rem; justify-content:flex-end; flex-wrap:wrap;">
       <a href="dashboard.html" class="btn btn-secondary">Отмена</a>
-      <button class="btn btn-primary" type="button" @click="save()">Сохранить анализ</button>
+      <button class="btn btn-primary" type="button" @click="save()" :disabled="busy">
+        <span x-text="busy ? 'Сохраняем…' : 'Сохранить анализ'"></span>
+      </button>
     </div>
   </main>
 
-  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <script src="https://unpkg.com/lucide@latest/dist/umd/lucide.min.js"></script>
   <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js"></script>
-  <script src="js/supabase-client.js"></script>
-  <script src="js/auth.js"></script>
   <script src="js/so2-logic.js"></script>
   <script src="js/analyses.js"></script>
+  <script src="js/auth.js"></script>
   <script>
-    document.addEventListener('DOMContentLoaded', () => {
-      if (window.lucide) window.lucide.createIcons();
-      requireAuth();
-    });
+    const WT_LABELS = {
+      white: 'Белое сухое', 'white-sweet': 'Белое сладкое', red: 'Красное',
+      rose: 'Розовое', orange: 'Оранжевое', 'pet-nat': 'Pet-nat', sparkling: 'Игристое',
+    };
 
     function analysisForm() {
       return {
-        wineType: 'white',
+        samples: [],
+        sampleId: '',
+        newSample: { sample_code: '', variety: '', vintage: new Date().getFullYear(), stage: 'aging', vessel: '' },
+        wineType: 'red',
         volume: 100,
-        ph: null,
-        freeSO2: null,
-        totalSO2: null,
-        va: null,
 
-        get molecular() {
-          return window.SO2 ? window.SO2.molecular(this.freeSO2, this.ph) : null;
+        ph: null, freeSO2: null, totalSO2: null, va: null, ta: null,
+        alcohol: null, rs: null, temp: null, analyst: '', notes: '',
+
+        busy: false, err: '',
+
+        async init() {
+          await requireAuth();
+          this.samples = await listSamples();
+          const presetId = new URLSearchParams(location.search).get('sample');
+          if (presetId && this.samples.some(s => s.id === presetId)) {
+            this.sampleId = presetId;
+            this.onSampleChange();
+          }
+          this.$nextTick(() => window.lucide?.createIcons());
         },
-        get status() {
-          if (this.molecular === null) return 'unknown';
-          return window.SO2.status(this.molecular, this.wineType);
+
+        get selectedSample() {
+          return this.samples.find(s => s.id === this.sampleId) || null;
         },
-        get vaStatus() {
-          return window.SO2 ? window.SO2.vaStatus(this.va) : 'unknown';
+        get wineTypeLabel() { return WT_LABELS[this.wineType] || this.wineType; },
+
+        onSampleChange() {
+          const s = this.selectedSample;
+          if (s) {
+            this.wineType = s.wine_type || 'red';
+            if (s.volume_liters) this.volume = s.volume_liters;
+          }
         },
-        get targetRange() {
-          const t = window.SO2 && window.SO2.TARGETS[this.wineType];
-          return t ? `${t.min}–${t.max}` : '—';
-        },
+
+        get molecular()   { return window.SO2 ? window.SO2.molecular(this.freeSO2, this.ph) : null; },
+        get status()      { if (this.molecular === null) return 'unknown'; return window.SO2.status(this.molecular, this.wineType); },
+        get vaStatus()    { return window.SO2 ? window.SO2.vaStatus(this.va) : 'unknown'; },
+        get targetRange() { const t = window.SO2 && window.SO2.TARGETS[this.wineType]; return t ? `${t.min}–${t.max}` : '—'; },
         get deltaFree() {
           const t = window.SO2 && window.SO2.TARGETS[this.wineType];
           if (!t || this.ph == null || this.freeSO2 == null) return 0;
-          const targetFree = window.SO2.freeForMolecular(t.min, this.ph);
-          return Math.max(0, targetFree - this.freeSO2);
+          return Math.max(0, window.SO2.freeForMolecular(t.min, this.ph) - this.freeSO2);
         },
         get kmbsDose() {
           if (!this.deltaFree || !this.volume) return null;
           return window.SO2.kmbsGrams(this.deltaFree, this.volume);
         },
 
-        save() {
-          alert('Сохранение будет реализовано на шаге 4.');
-        }
+        async save() {
+          this.err = ''; this.busy = true;
+          try {
+            if (!this.sampleId) throw new Error('Выберите образец или создайте новый');
+            if (this.ph == null || this.freeSO2 == null) throw new Error('pH и свободный SO₂ обязательны');
+
+            let sid = this.sampleId;
+            if (sid === '__new__') {
+              if (!this.newSample.sample_code) throw new Error('Введите код нового образца');
+              const created = await createSample({
+                ...this.newSample,
+                wine_type: this.wineType,
+                volume_liters: this.volume,
+              });
+              sid = created.id;
+            }
+            await createAnalysis({
+              sample_id: sid,
+              ph: this.ph, free_so2: this.freeSO2, total_so2: this.totalSO2,
+              volatile_acidity: this.va, titratable_acidity: this.ta,
+              alcohol: this.alcohol, residual_sugar: this.rs, temperature: this.temp,
+              analyst_name: this.analyst, notes: this.notes,
+            });
+            location.href = 'sample.html?id=' + encodeURIComponent(sid);
+          } catch (ex) {
+            this.err = ex.message; this.busy = false;
+          }
+        },
       };
     }
   </script>

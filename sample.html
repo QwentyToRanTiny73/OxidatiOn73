@@ -13,7 +13,7 @@
   <script src="https://cdn.tailwindcss.com"></script>
   <link rel="stylesheet" href="css/main.css">
 </head>
-<body>
+<body x-data="samplePage()" x-init="init()" x-cloak>
   <header class="appbar">
     <a href="dashboard.html" class="brand">Журнал лаборатории</a>
     <nav style="display:flex; gap:0.25rem;">
@@ -24,25 +24,26 @@
   </header>
 
   <main class="container">
-    <!-- Режим списка: страница без ?id= показывает все образцы. -->
-    <section id="list-view">
+    <!-- ============ ВИД-СПИСОК ============ -->
+    <section x-show="mode === 'list'">
       <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:1rem; gap:0.5rem; flex-wrap:wrap;">
         <h1 style="margin:0;">Образцы</h1>
         <a href="new-analysis.html" class="btn btn-primary"><i data-lucide="plus"></i> Новый анализ</a>
       </div>
 
       <div style="display:flex; gap:0.5rem; flex-wrap:wrap; margin-bottom:1rem;">
-        <select class="field" id="filter-type" style="width:auto; min-width:160px;">
+        <select class="field" x-model="filters.wineType" @change="reloadList()" style="width:auto; min-width:160px;">
           <option value="">Все типы</option>
-          <option value="white">Белое</option>
+          <option value="white">Белое сухое</option>
+          <option value="white-sweet">Белое сладкое</option>
           <option value="red">Красное</option>
           <option value="rose">Розовое</option>
           <option value="orange">Оранжевое</option>
           <option value="pet-nat">Pet-nat</option>
           <option value="sparkling">Игристое</option>
         </select>
-        <input class="field" id="filter-vintage" type="number" placeholder="Винтаж" style="width:auto; max-width:120px;">
-        <select class="field" id="filter-stage" style="width:auto; min-width:200px;">
+        <input class="field num" x-model="filters.vintage" @input.debounce.300ms="reloadList()" type="number" placeholder="Винтаж" style="width:auto; max-width:120px;">
+        <select class="field" x-model="filters.stage" @change="reloadList()" style="width:auto; min-width:200px;">
           <option value="">Все стадии</option>
           <option value="must">Сусло</option>
           <option value="fermentation">Брожение</option>
@@ -67,106 +68,377 @@
               <th>Посл. анализ</th>
             </tr>
           </thead>
-          <tbody id="samples-list">
-            <tr><td colspan="8" style="text-align:center; color:var(--text-muted); padding: 2rem;">Загрузка… (шаг 4)</td></tr>
+          <tbody>
+            <template x-if="loadedList && list.length === 0">
+              <tr><td colspan="8" style="text-align:center; color:var(--text-muted); padding: 2rem;">
+                Образцов пока нет. Добавьте первый через «Новый анализ».
+              </td></tr>
+            </template>
+            <template x-for="s in list" :key="s.id">
+              <tr @click="open(s.id)" style="cursor:pointer;">
+                <td><strong x-text="s.sample_code"></strong></td>
+                <td x-text="s.variety || '—'"></td>
+                <td class="num" x-text="s.vintage || '—'"></td>
+                <td x-text="wineTypeLabel(s.wine_type)"></td>
+                <td x-text="stageLabel(s.stage)"></td>
+                <td x-text="s.vessel || '—'"></td>
+                <td class="num" x-text="s.volume_liters ?? '—'"></td>
+                <td x-text="s.last_analyzed_at ? fmtDate(s.last_analyzed_at) : '—'"></td>
+              </tr>
+            </template>
           </tbody>
         </table>
       </div>
     </section>
 
-    <!-- Режим карточки: показывается при ?id=<uuid>. -->
-    <section id="card-view" hidden>
+    <!-- ============ ВИД-КАРТОЧКА ============ -->
+    <section x-show="mode === 'card'">
       <a href="sample.html" class="btn btn-ghost" style="padding:0 0.5rem; margin-bottom:0.5rem;"><i data-lucide="arrow-left"></i> К списку</a>
 
-      <div style="display:flex; align-items:flex-start; justify-content:space-between; gap:1rem; flex-wrap:wrap; margin-bottom:1rem;">
+      <template x-if="sample">
         <div>
-          <h1 style="margin:0;" id="sample-title">Образец</h1>
-          <p style="color:var(--text-muted); margin:0.25rem 0 0;" id="sample-subtitle"></p>
-        </div>
-        <div style="display:flex; gap:0.5rem; flex-wrap:wrap;">
-          <a href="#" class="btn btn-secondary" id="new-analysis-here"><i data-lucide="plus"></i> Новый анализ</a>
-          <button class="btn btn-secondary" id="export-pdf"><i data-lucide="file-down"></i> PDF</button>
-        </div>
-      </div>
+          <div style="display:flex; align-items:flex-start; justify-content:space-between; gap:1rem; flex-wrap:wrap; margin-bottom:1rem;">
+            <div>
+              <h1 style="margin:0;" x-text="sample.sample_code"></h1>
+              <p style="color:var(--text-muted); margin:0.25rem 0 0;"
+                 x-text="(sample.variety || '') + (sample.vintage ? ' · ' + sample.vintage : '') + ' · ' + wineTypeLabel(sample.wine_type)"></p>
+            </div>
+            <div style="display:flex; gap:0.5rem; flex-wrap:wrap;">
+              <a :href="'new-analysis.html?sample=' + sample.id" class="btn btn-secondary"><i data-lucide="plus"></i> Новый анализ</a>
+              <button class="btn btn-secondary" @click="exportPDF()"><i data-lucide="file-down"></i> PDF</button>
+            </div>
+          </div>
 
-      <div class="card" style="margin-bottom:1rem;">
-        <h2 style="margin: 0 0 0.75rem;">Метаданные</h2>
-        <div id="sample-meta" style="display:grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 0.75rem;">
-          <!-- заполнится на шаге 4 -->
-        </div>
-      </div>
+          <div class="card" style="margin-bottom:1rem;">
+            <h2 style="margin: 0 0 0.75rem;">Метаданные</h2>
+            <div style="display:grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 0.75rem;">
+              <div><div class="field-label">Стадия</div><div x-text="stageLabel(sample.stage)"></div></div>
+              <div><div class="field-label">Ёмкость</div><div x-text="sample.vessel || '—'"></div></div>
+              <div><div class="field-label">Объём</div><div class="num" x-text="(sample.volume_liters ?? '—') + ' л'"></div></div>
+              <div><div class="field-label">Создан</div><div x-text="fmtDate(sample.created_at)"></div></div>
+              <template x-if="sample.notes">
+                <div style="grid-column: 1 / -1;"><div class="field-label">Заметки</div><div x-text="sample.notes"></div></div>
+              </template>
+            </div>
+          </div>
 
-      <div class="card" style="margin-bottom:1rem;">
-        <h2 style="margin: 0 0 0.75rem;">Динамика показателей</h2>
-        <canvas id="trends-chart" height="240"></canvas>
-        <!-- Реализация на шаге 7 -->
-      </div>
+          <div class="card" style="margin-bottom:1rem;">
+            <h2 style="margin: 0 0 0.75rem;">Динамика показателей</h2>
+            <template x-if="analyses.length === 0">
+              <p style="color:var(--text-muted); margin:0;">Нет анализов для построения графика.</p>
+            </template>
+            <canvas x-show="analyses.length > 0" id="trends-chart" height="240"></canvas>
+          </div>
 
-      <div class="card" style="margin-bottom:1rem;">
-        <h2 style="margin: 0 0 0.75rem;">Анализы</h2>
-        <div class="table-wrap">
-          <table>
-            <thead>
-              <tr>
-                <th>Дата</th>
-                <th class="num">pH</th>
-                <th class="num">TA</th>
-                <th class="num">VA</th>
-                <th class="num">Алк.</th>
-                <th class="num">Своб. SO₂</th>
-                <th class="num">Мол. SO₂</th>
-                <th>Аналитик</th>
-              </tr>
-            </thead>
-            <tbody id="analyses-list">
-              <tr><td colspan="8" style="text-align:center; color:var(--text-muted); padding: 1.5rem;">Загрузка… (шаг 4)</td></tr>
-            </tbody>
-          </table>
-        </div>
-      </div>
+          <div class="card" style="margin-bottom:1rem;">
+            <h2 style="margin: 0 0 0.75rem;">Анализы</h2>
+            <div class="table-wrap">
+              <table>
+                <thead>
+                  <tr>
+                    <th>Дата</th>
+                    <th class="num">pH</th>
+                    <th class="num">TA, г/л</th>
+                    <th class="num">VA, г/л</th>
+                    <th class="num">Алк., %</th>
+                    <th class="num">Своб. SO₂</th>
+                    <th class="num">Мол. SO₂</th>
+                    <th>Аналитик</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <template x-if="analyses.length === 0">
+                    <tr><td colspan="8" style="text-align:center; color:var(--text-muted); padding:1.5rem;">Пока нет анализов.</td></tr>
+                  </template>
+                  <template x-for="a in analysesReversed" :key="a.id">
+                    <tr>
+                      <td x-text="fmtDate(a.analyzed_at)"></td>
+                      <td class="num" x-text="a.ph?.toFixed(2) ?? '—'"></td>
+                      <td class="num" x-text="a.titratable_acidity?.toFixed(1) ?? '—'"></td>
+                      <td class="num" :class="vaClass(a)" x-text="a.volatile_acidity?.toFixed(2) ?? '—'"></td>
+                      <td class="num" x-text="a.alcohol?.toFixed(1) ?? '—'"></td>
+                      <td class="num" x-text="a.free_so2?.toFixed(0) ?? '—'"></td>
+                      <td class="num" :class="molClass(a)" x-text="a.molecular_so2?.toFixed(2) ?? '—'"></td>
+                      <td x-text="a.analyst_name || '—'"></td>
+                    </tr>
+                  </template>
+                </tbody>
+              </table>
+            </div>
+          </div>
 
-      <div class="card">
-        <h2 style="margin: 0 0 0.75rem;">История добавок SO₂</h2>
-        <div class="table-wrap">
-          <table>
-            <thead>
-              <tr>
-                <th>Дата</th>
-                <th class="num">Доб. SO₂, мг/л</th>
-                <th class="num">KMBS, г</th>
-                <th>Причина</th>
-              </tr>
-            </thead>
-            <tbody id="so2-history">
-              <tr><td colspan="4" style="text-align:center; color:var(--text-muted); padding: 1.5rem;">Загрузка… (шаг 4)</td></tr>
-            </tbody>
-          </table>
+          <div class="card">
+            <div style="display:flex; align-items:center; justify-content:space-between; gap:0.5rem; margin-bottom: 0.75rem; flex-wrap:wrap;">
+              <h2 style="margin: 0;">История добавок SO₂</h2>
+              <button class="btn btn-secondary" @click="doseFormOpen = !doseFormOpen">
+                <i data-lucide="plus"></i> Записать добавку
+              </button>
+            </div>
+
+            <div x-show="doseFormOpen" style="margin-bottom: 1rem; padding: 0.75rem; background: #F6F4EC; border-radius: 6px;">
+              <div style="display:grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 0.5rem;">
+                <div>
+                  <label class="field-label">Добавлено SO₂, мг/л</label>
+                  <input class="field num" type="number" step="1" min="0" x-model.number="doseForm.so2">
+                </div>
+                <div>
+                  <label class="field-label">Навеска KMBS, г</label>
+                  <input class="field num" type="number" step="0.01" min="0"
+                         :value="kmbsCalc"
+                         @input="doseForm.kmbs = $event.target.value">
+                </div>
+                <div>
+                  <label class="field-label">Причина</label>
+                  <select class="field" x-model="doseForm.reason">
+                    <option value="routine">Рутинная защита</option>
+                    <option value="pre-bottling">Перед розливом</option>
+                    <option value="after-racking">После переливки</option>
+                    <option value="other">Другое</option>
+                  </select>
+                </div>
+              </div>
+              <div style="margin-top: 0.5rem;">
+                <label class="field-label">Заметки</label>
+                <input class="field" type="text" x-model="doseForm.notes">
+              </div>
+              <p style="color: var(--text-muted); font-size: 0.8125rem; margin: 0.5rem 0 0;"
+                 x-show="doseForm.so2 && sample.volume_liters">
+                Ожидаемый прирост свободного SO₂ при добавке
+                <strong class="num" x-text="doseForm.so2"></strong> мг/л в <span class="num" x-text="sample.volume_liters"></span> л:
+                <strong class="num" x-text="kmbsCalc"></strong> г KMBS.
+              </p>
+              <div style="display:flex; gap:0.5rem; justify-content:flex-end; margin-top: 0.75rem;">
+                <button class="btn btn-ghost" @click="doseFormOpen = false">Отмена</button>
+                <button class="btn btn-primary" @click="saveDose()">Сохранить</button>
+              </div>
+            </div>
+
+            <div class="table-wrap">
+              <table>
+                <thead>
+                  <tr>
+                    <th>Дата</th>
+                    <th class="num">Доб. SO₂, мг/л</th>
+                    <th class="num">KMBS, г</th>
+                    <th>Причина</th>
+                    <th>Заметки</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <template x-if="doses.length === 0">
+                    <tr><td colspan="5" style="text-align:center; color:var(--text-muted); padding: 1.5rem;">Добавок пока не было.</td></tr>
+                  </template>
+                  <template x-for="d in doses" :key="d.id">
+                    <tr>
+                      <td x-text="fmtDate(d.added_at)"></td>
+                      <td class="num" x-text="d.so2_added_mg_l?.toFixed(0) ?? '—'"></td>
+                      <td class="num" x-text="d.kmbs_dose_g?.toFixed(2) ?? '—'"></td>
+                      <td x-text="reasonLabel(d.reason)"></td>
+                      <td x-text="d.notes || '—'"></td>
+                    </tr>
+                  </template>
+                </tbody>
+              </table>
+            </div>
+          </div>
         </div>
-      </div>
+      </template>
     </section>
   </main>
 
-  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/jspdf@2.5.1/dist/jspdf.umd.min.js"></script>
   <script src="https://unpkg.com/lucide@latest/dist/umd/lucide.min.js"></script>
   <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js"></script>
-  <script src="js/supabase-client.js"></script>
-  <script src="js/auth.js"></script>
   <script src="js/so2-logic.js"></script>
   <script src="js/analyses.js"></script>
+  <script src="js/auth.js"></script>
   <script>
-    document.addEventListener('DOMContentLoaded', () => {
-      if (window.lucide) window.lucide.createIcons();
-      requireAuth();
-      const id = new URLSearchParams(location.search).get('id');
-      if (id) {
-        document.getElementById('list-view').hidden = true;
-        document.getElementById('card-view').hidden = false;
-        const link = document.getElementById('new-analysis-here');
-        if (link) link.href = `new-analysis.html?sample=${encodeURIComponent(id)}`;
-      }
-    });
+    const WINE_TYPE_LABELS = {
+      white: 'Белое сухое', 'white-sweet': 'Белое сладкое', red: 'Красное',
+      rose: 'Розовое', orange: 'Оранжевое', 'pet-nat': 'Pet-nat', sparkling: 'Игристое',
+    };
+    const STAGE_LABELS = {
+      must: 'Сусло', fermentation: 'Брожение', 'post-fermentation': 'После брожения',
+      aging: 'Выдержка', 'before-bottling': 'Перед розливом', bottled: 'В бутылке',
+    };
+    const REASON_LABELS = {
+      routine: 'Рутинная защита', 'pre-bottling': 'Перед розливом',
+      'after-racking': 'После переливки', other: 'Другое',
+    };
+
+    function samplePage() {
+      return {
+        mode: 'list',
+        list: [],
+        loadedList: false,
+        filters: { wineType: '', vintage: '', stage: '' },
+
+        sample: null,
+        analyses: [],
+        doses: [],
+
+        doseFormOpen: false,
+        doseForm: { so2: null, kmbs: null, reason: 'routine', notes: '' },
+
+        get analysesReversed() {
+          return [...this.analyses].sort((a,b) => new Date(b.analyzed_at) - new Date(a.analyzed_at));
+        },
+        get kmbsCalc() {
+          if (!this.doseForm.so2 || !this.sample?.volume_liters) return '';
+          return ((this.doseForm.so2 * this.sample.volume_liters) / 570).toFixed(2);
+        },
+
+        async init() {
+          await requireAuth();
+          const id = new URLSearchParams(location.search).get('id');
+          if (id) {
+            this.mode = 'card';
+            await this.loadCard(id);
+          } else {
+            this.mode = 'list';
+            await this.reloadList();
+          }
+          this.$nextTick(() => window.lucide?.createIcons());
+        },
+
+        async reloadList() {
+          this.list = await listSamples({
+            wineType: this.filters.wineType || undefined,
+            vintage:  this.filters.vintage  || undefined,
+            stage:    this.filters.stage    || undefined,
+          });
+          this.loadedList = true;
+          this.$nextTick(() => window.lucide?.createIcons());
+        },
+
+        async loadCard(id) {
+          this.sample   = await getSample(id);
+          if (!this.sample) { alert('Образец не найден'); location.href = 'sample.html'; return; }
+          this.analyses = await listAnalyses(id);
+          this.doses    = await listSO2Doses(id);
+          this.$nextTick(() => { this.drawChart(); window.lucide?.createIcons(); });
+        },
+
+        drawChart() {
+          const canvas = document.getElementById('trends-chart');
+          if (!canvas || this.analyses.length === 0 || !window.Chart) return;
+          if (this._chart) this._chart.destroy();
+          const labels = this.analyses.map(a => new Date(a.analyzed_at).toLocaleDateString('ru-RU', { day:'2-digit', month:'2-digit' }));
+          const ds = (label, color, key, yAxisID = 'y') => ({
+            label, data: this.analyses.map(a => a[key] ?? null),
+            borderColor: color, backgroundColor: color + '22', tension: 0.25, yAxisID, spanGaps: true,
+          });
+          this._chart = new Chart(canvas, {
+            type: 'line',
+            data: { labels, datasets: [
+              ds('pH', '#5C1A1B', 'ph', 'yLeft'),
+              ds('Своб. SO₂, мг/л', '#5C6B3D', 'free_so2'),
+              ds('Мол. SO₂, мг/л', '#A02C2C', 'molecular_so2', 'yMol'),
+              ds('VA, г/л', '#C9A227', 'volatile_acidity', 'yLeft'),
+            ]},
+            options: {
+              responsive: true, maintainAspectRatio: false,
+              interaction: { mode: 'index', intersect: false },
+              scales: {
+                y:     { position: 'right', title: { display: true, text: 'Своб. SO₂' } },
+                yMol:  { position: 'right', display: false },
+                yLeft: { position: 'left',  title: { display: true, text: 'pH / VA' } },
+              },
+              plugins: { legend: { position: 'bottom' } },
+            }
+          });
+        },
+
+        async saveDose() {
+          try {
+            const kmbs = this.doseForm.kmbs ? Number(this.doseForm.kmbs) : Number(this.kmbsCalc);
+            await addSO2Dose({
+              sample_id: this.sample.id,
+              so2_added_mg_l: this.doseForm.so2,
+              kmbs_dose_g: kmbs,
+              reason: this.doseForm.reason,
+              notes:  this.doseForm.notes,
+            });
+            this.doses = await listSO2Doses(this.sample.id);
+            this.doseForm = { so2: null, kmbs: null, reason: 'routine', notes: '' };
+            this.doseFormOpen = false;
+          } catch (e) { alert(e.message); }
+        },
+
+        exportPDF() {
+          const { jsPDF } = window.jspdf;
+          const doc = new jsPDF({ unit: 'pt', format: 'a4' });
+          const margin = 40;
+          let y = margin;
+
+          doc.setFont('helvetica', 'bold'); doc.setFontSize(18);
+          doc.text(`Sample ${this.sample.sample_code}`, margin, y); y += 24;
+
+          doc.setFont('helvetica', 'normal'); doc.setFontSize(11);
+          const meta = [
+            `Variety: ${this.sample.variety || '-'}`,
+            `Vintage: ${this.sample.vintage || '-'}`,
+            `Type: ${this.sample.wine_type || '-'}`,
+            `Stage: ${this.sample.stage || '-'}`,
+            `Vessel: ${this.sample.vessel || '-'}`,
+            `Volume: ${this.sample.volume_liters ?? '-'} L`,
+          ];
+          meta.forEach(line => { doc.text(line, margin, y); y += 16; });
+          y += 8;
+
+          doc.setFont('helvetica', 'bold'); doc.setFontSize(13);
+          doc.text('Analyses', margin, y); y += 18;
+          doc.setFont('helvetica', 'normal'); doc.setFontSize(10);
+
+          const header = 'Date       pH   TA    VA    Alc   Free  Mol';
+          doc.text(header, margin, y); y += 14;
+          this.analyses.forEach(a => {
+            const row = [
+              new Date(a.analyzed_at).toLocaleDateString('ru-RU').padEnd(11),
+              (a.ph?.toFixed(2) ?? '-').padStart(4),
+              (a.titratable_acidity?.toFixed(1) ?? '-').padStart(5),
+              (a.volatile_acidity?.toFixed(2) ?? '-').padStart(5),
+              (a.alcohol?.toFixed(1) ?? '-').padStart(5),
+              (a.free_so2?.toFixed(0) ?? '-').padStart(5),
+              (a.molecular_so2?.toFixed(2) ?? '-').padStart(5),
+            ].join(' ');
+            doc.text(row, margin, y); y += 14;
+            if (y > 760) { doc.addPage(); y = margin; }
+          });
+
+          if (this.doses.length) {
+            y += 12;
+            doc.setFont('helvetica', 'bold'); doc.setFontSize(13);
+            doc.text('SO2 doses', margin, y); y += 18;
+            doc.setFont('helvetica', 'normal'); doc.setFontSize(10);
+            this.doses.forEach(d => {
+              const row = `${new Date(d.added_at).toLocaleDateString('ru-RU')}   +${d.so2_added_mg_l ?? '-'} mg/L   ${d.kmbs_dose_g?.toFixed(2) ?? '-'} g KMBS   ${d.reason || ''}`;
+              doc.text(row, margin, y); y += 14;
+              if (y > 760) { doc.addPage(); y = margin; }
+            });
+          }
+
+          doc.save(`sample-${this.sample.sample_code}.pdf`);
+        },
+
+        open(id) { location.href = 'sample.html?id=' + encodeURIComponent(id); },
+
+        wineTypeLabel(t) { return WINE_TYPE_LABELS[t] || t || '—'; },
+        stageLabel(s)    { return STAGE_LABELS[s] || s || '—'; },
+        reasonLabel(r)   { return REASON_LABELS[r] || r || '—'; },
+        fmtDate(s) { return new Date(s).toLocaleDateString('ru-RU', { day:'2-digit', month:'2-digit', year:'numeric' }); },
+        molClass(a) {
+          if (a.molecular_so2 == null) return '';
+          const st = window.SO2?.status(a.molecular_so2, this.sample?.wine_type);
+          return st === 'ok' ? 'value-ok' : st === 'warn' ? 'value-warn' : st === 'bad' ? 'value-bad' : '';
+        },
+        vaClass(a) {
+          const st = window.SO2?.vaStatus(a.volatile_acidity);
+          return st === 'warn' ? 'value-warn' : st === 'bad' ? 'value-bad' : '';
+        },
+      };
+    }
   </script>
 </body>
 </html>

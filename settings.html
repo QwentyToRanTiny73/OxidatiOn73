@@ -13,7 +13,7 @@
   <script src="https://cdn.tailwindcss.com"></script>
   <link rel="stylesheet" href="css/main.css">
 </head>
-<body>
+<body x-data="settingsPage()" x-init="init()" x-cloak>
   <header class="appbar">
     <a href="dashboard.html" class="brand">Журнал лаборатории</a>
     <nav style="display:flex; gap:0.25rem;">
@@ -26,20 +26,24 @@
   <main class="container" style="max-width: 760px;">
     <h1 style="margin: 0 0 1rem;">Настройки</h1>
 
+    <template x-if="msg">
+      <div class="alert alert-green" style="margin-bottom: 1rem;" x-text="msg"></div>
+    </template>
+
     <div class="card" style="margin-bottom:1rem;">
       <h2 style="margin: 0 0 0.75rem;">Винодельня</h2>
       <div style="display:grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 0.75rem;">
         <div>
           <label class="field-label">Название</label>
-          <input class="field" type="text" id="winery-name">
+          <input class="field" type="text" x-model="form.name">
         </div>
         <div>
           <label class="field-label">Контактный email</label>
-          <input class="field" type="email" id="winery-email">
+          <input class="field" type="email" x-model="form.owner_email">
         </div>
         <div>
           <label class="field-label">Тип хозяйства</label>
-          <select class="field" id="winery-type">
+          <select class="field" x-model="form.winery_type">
             <option value="estate">Частное хозяйство</option>
             <option value="garage">Гаражное виноделие</option>
             <option value="cooperative">Кооператив</option>
@@ -48,7 +52,7 @@
         </div>
       </div>
       <div style="margin-top:1rem; display:flex; justify-content:flex-end;">
-        <button class="btn btn-primary" type="button">Сохранить</button>
+        <button class="btn btn-primary" type="button" @click="save()">Сохранить</button>
       </div>
     </div>
 
@@ -57,33 +61,83 @@
       <div class="table-wrap" style="margin-bottom: 0.75rem;">
         <table>
           <thead>
-            <tr><th>Email</th><th>Роль</th><th></th></tr>
+            <tr><th>Email</th><th>Роль</th></tr>
           </thead>
-          <tbody id="users-list">
-            <tr><td colspan="3" style="text-align:center; color:var(--text-muted); padding: 1.5rem;">Загрузка… (шаг 3)</td></tr>
+          <tbody>
+            <template x-if="users.length === 0">
+              <tr><td colspan="2" style="text-align:center; color:var(--text-muted); padding: 1.5rem;">Пока только вы.</td></tr>
+            </template>
+            <template x-for="u in users" :key="u.email">
+              <tr>
+                <td x-text="u.email"></td>
+                <td x-text="roleLabel(u.role)"></td>
+              </tr>
+            </template>
           </tbody>
         </table>
       </div>
-      <button class="btn btn-secondary" type="button"><i data-lucide="user-plus"></i> Пригласить пользователя</button>
+      <button class="btn btn-secondary" type="button" disabled title="Появится после подключения Supabase">
+        <i data-lucide="user-plus"></i> Пригласить пользователя
+      </button>
     </div>
 
-    <div class="card">
+    <div class="card" style="margin-bottom:1rem;">
       <h2 style="margin: 0 0 0.75rem;">Аккаунт</h2>
-      <button class="btn btn-secondary" type="button" id="signout-btn"><i data-lucide="log-out"></i> Выйти</button>
+      <div style="display:flex; gap:0.5rem; flex-wrap:wrap;">
+        <button class="btn btn-secondary" type="button" @click="doSignOut()"><i data-lucide="log-out"></i> Выйти</button>
+      </div>
+    </div>
+
+    <div class="card" style="border-color: var(--alert-red); background: #FBF3F3;">
+      <h2 style="margin: 0 0 0.75rem; color: var(--alert-red);">Опасная зона</h2>
+      <p style="margin: 0 0 0.75rem; font-size: 0.9375rem;">
+        Прототип хранит данные в этом браузере. Если хотите начать с нуля — удалите всё локально.
+      </p>
+      <button class="btn btn-secondary" type="button" @click="resetAll()"
+              style="border-color: var(--alert-red); color: var(--alert-red);">
+        <i data-lucide="trash-2"></i> Сбросить локальные данные
+      </button>
     </div>
   </main>
 
-  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <script src="https://unpkg.com/lucide@latest/dist/umd/lucide.min.js"></script>
   <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js"></script>
-  <script src="js/supabase-client.js"></script>
+  <script src="js/so2-logic.js"></script>
+  <script src="js/analyses.js"></script>
   <script src="js/auth.js"></script>
   <script>
-    document.addEventListener('DOMContentLoaded', () => {
-      if (window.lucide) window.lucide.createIcons();
-      requireAuth();
-      document.getElementById('signout-btn')?.addEventListener('click', () => signOut().catch(console.error));
-    });
+    function settingsPage() {
+      return {
+        form: { name: '', owner_email: '', winery_type: 'estate' },
+        users: [],
+        msg: '',
+
+        async init() {
+          await requireAuth();
+          const w = await getCurrentWinery();
+          if (w) this.form = { name: w.name, owner_email: w.owner_email, winery_type: w.winery_type || 'estate' };
+          const session = JSON.parse(localStorage.getItem('oxidation73:session') || 'null');
+          const allUsers = JSON.parse(localStorage.getItem('oxidation73:users') || '[]');
+          this.users = allUsers.filter(u => u.winery_id === session?.wineryId).map(u => ({ email: u.email, role: u.role }));
+          this.$nextTick(() => window.lucide?.createIcons());
+        },
+
+        async save() {
+          await updateCurrentWinery(this.form);
+          this.msg = 'Сохранено.';
+          setTimeout(() => this.msg = '', 2000);
+        },
+        doSignOut() { signOut(); },
+        resetAll() {
+          if (!confirm('Удалить всех пользователей, образцы и анализы из этого браузера?')) return;
+          ['oxidation73:users','oxidation73:wineries','oxidation73:session',
+           'oxidation73:samples','oxidation73:analyses','oxidation73:so2_doses']
+            .forEach(k => localStorage.removeItem(k));
+          location.href = 'index.html';
+        },
+        roleLabel(r) { return ({ owner: 'Владелец', lab_tech: 'Лаборант', viewer: 'Просмотр' })[r] || r; },
+      };
+    }
   </script>
 </body>
 </html>
