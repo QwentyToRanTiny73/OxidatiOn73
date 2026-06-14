@@ -267,6 +267,44 @@
       'after-racking': 'После переливки', other: 'Другое',
     };
 
+    // --- PDF: кириллический шрифт (DejaVu Sans), кэшируется между экспортами ---
+    let _pdfFontB64 = null;
+    async function ensureCyrillicFont(doc) {
+      if (!_pdfFontB64) {
+        const url = 'https://cdn.jsdelivr.net/npm/dejavu-fonts-ttf@2.37.3/ttf/DejaVuSans.ttf';
+        const resp = await fetch(url);
+        if (!resp.ok) throw new Error('font fetch ' + resp.status);
+        _pdfFontB64 = arrayBufferToBase64(await resp.arrayBuffer());
+      }
+      doc.addFileToVFS('DejaVuSans.ttf', _pdfFontB64);
+      doc.addFont('DejaVuSans.ttf', 'DejaVuSans', 'normal');
+      return 'DejaVuSans';
+    }
+    function arrayBufferToBase64(buf) {
+      let binary = '';
+      const bytes = new Uint8Array(buf), chunk = 0x8000;
+      for (let i = 0; i < bytes.length; i += chunk) {
+        binary += String.fromCharCode.apply(null, bytes.subarray(i, i + chunk));
+      }
+      return btoa(binary);
+    }
+    // Запасная транслитерация на случай недоступности шрифта (offline).
+    const TRANSLIT_MAP = {
+      а:'a',б:'b',в:'v',г:'g',д:'d',е:'e',ё:'e',ж:'zh',з:'z',и:'i',й:'y',к:'k',л:'l',м:'m',
+      н:'n',о:'o',п:'p',р:'r',с:'s',т:'t',у:'u',ф:'f',х:'kh',ц:'ts',ч:'ch',ш:'sh',щ:'sch',
+      ъ:'',ы:'y',ь:'',э:'e',ю:'yu',я:'ya','№':'No','₂':'2','°':' deg ','—':'-','·':'-'
+    };
+    function translit(s) {
+      return String(s).split('').map(ch => {
+        const lower = ch.toLowerCase();
+        if (TRANSLIT_MAP[lower] !== undefined) {
+          const r = TRANSLIT_MAP[lower];
+          return ch === lower ? r : (r.charAt(0).toUpperCase() + r.slice(1));
+        }
+        return ch;
+      }).join('');
+    }
+
     function samplePage() {
       return {
         mode: 'list',
@@ -277,6 +315,7 @@
         sample: null,
         analyses: [],
         doses: [],
+        wineryNameForPdf: '',
 
         doseFormOpen: false,
         doseForm: { so2: null, kmbs: null, reason: 'routine', notes: '' },
@@ -317,6 +356,8 @@
           if (!this.sample) { alert('Образец не найден'); location.href = 'sample.html'; return; }
           this.analyses = await listAnalyses(id);
           this.doses    = await listSO2Doses(id);
+          const w = await getCurrentWinery();
+          this.wineryNameForPdf = w ? w.name : '';
           this.$nextTick(() => { this.drawChart(); window.lucide?.createIcons(); });
         },
 
@@ -366,60 +407,77 @@
           } catch (e) { alert(e.message); }
         },
 
-        exportPDF() {
+        async exportPDF() {
           const { jsPDF } = window.jspdf;
           const doc = new jsPDF({ unit: 'pt', format: 'a4' });
-          const margin = 40;
+
+          // Подключаем кириллический шрифт. Если не удалось — транслитерируем,
+          // чтобы PDF всё равно был читаемым (а не пустыми квадратами).
+          let font = 'helvetica';
+          try { font = await ensureCyrillicFont(doc); } catch (e) { console.warn('PDF: кириллический шрифт недоступен, транслитерация', e); }
+          const T = (s) => (font === 'helvetica' ? translit(String(s ?? '')) : String(s ?? ''));
+
+          const margin = 40, pageW = doc.internal.pageSize.getWidth();
           let y = margin;
+          const ln = (h = 14) => { y += h; if (y > 780) { doc.addPage(); y = margin; } };
 
-          doc.setFont('helvetica', 'bold'); doc.setFontSize(18);
-          doc.text(`Sample ${this.sample.sample_code}`, margin, y); y += 24;
+          doc.setFont(font, 'normal');
 
-          doc.setFont('helvetica', 'normal'); doc.setFontSize(11);
-          const meta = [
-            `Variety: ${this.sample.variety || '-'}`,
-            `Vintage: ${this.sample.vintage || '-'}`,
-            `Type: ${this.sample.wine_type || '-'}`,
-            `Stage: ${this.sample.stage || '-'}`,
-            `Vessel: ${this.sample.vessel || '-'}`,
-            `Volume: ${this.sample.volume_liters ?? '-'} L`,
+          // Заголовок
+          doc.setFontSize(18);
+          doc.text(T('Карточка образца ' + this.sample.sample_code), margin, y); ln(8);
+          doc.setFontSize(9); doc.setTextColor(120);
+          doc.text(T(this.wineryNameForPdf || 'Журнал лаборатории') + '  ·  ' +
+                   new Date().toLocaleDateString('ru-RU'), margin, y);
+          doc.setTextColor(20); ln(22);
+
+          // Метаданные
+          doc.setFontSize(13); doc.text(T('Метаданные'), margin, y); ln(18);
+          doc.setFontSize(10);
+          [
+            ['Сорт',    this.sample.variety || '—'],
+            ['Винтаж',  this.sample.vintage || '—'],
+            ['Тип',     this.wineTypeLabel(this.sample.wine_type)],
+            ['Стадия',  this.stageLabel(this.sample.stage)],
+            ['Ёмкость', this.sample.vessel || '—'],
+            ['Объём',   (this.sample.volume_liters ?? '—') + ' л'],
+          ].forEach(([k, v]) => { doc.text(T(k + ': ' + v), margin, y); ln(); });
+          if (this.sample.notes) { doc.text(T('Заметки: ' + this.sample.notes), margin, y, { maxWidth: pageW - 2*margin }); ln(); }
+          ln(8);
+
+          // Таблица анализов
+          doc.setFontSize(13); doc.text(T('Анализы'), margin, y); ln(18);
+          doc.setFontSize(9);
+          const cols = [
+            ['Дата', margin],       ['pH', 150],   ['TA', 195],
+            ['VA', 240],            ['Алк%', 290], ['Своб.SO₂', 345],
+            ['Мол.SO₂', 430],
           ];
-          meta.forEach(line => { doc.text(line, margin, y); y += 16; });
-          y += 8;
-
-          doc.setFont('helvetica', 'bold'); doc.setFontSize(13);
-          doc.text('Analyses', margin, y); y += 18;
-          doc.setFont('helvetica', 'normal'); doc.setFontSize(10);
-
-          const header = 'Date       pH   TA    VA    Alc   Free  Mol';
-          doc.text(header, margin, y); y += 14;
+          cols.forEach(([h, x]) => doc.text(T(h), x, y)); ln(4);
+          doc.setDrawColor(200); doc.line(margin, y, pageW - margin, y); ln(12);
           this.analyses.forEach(a => {
-            const row = [
-              new Date(a.analyzed_at).toLocaleDateString('ru-RU').padEnd(11),
-              (a.ph?.toFixed(2) ?? '-').padStart(4),
-              (a.titratable_acidity?.toFixed(1) ?? '-').padStart(5),
-              (a.volatile_acidity?.toFixed(2) ?? '-').padStart(5),
-              (a.alcohol?.toFixed(1) ?? '-').padStart(5),
-              (a.free_so2?.toFixed(0) ?? '-').padStart(5),
-              (a.molecular_so2?.toFixed(2) ?? '-').padStart(5),
-            ].join(' ');
-            doc.text(row, margin, y); y += 14;
-            if (y > 760) { doc.addPage(); y = margin; }
+            const cells = [
+              new Date(a.analyzed_at).toLocaleDateString('ru-RU'),
+              a.ph?.toFixed(2) ?? '—', a.titratable_acidity?.toFixed(1) ?? '—',
+              a.volatile_acidity?.toFixed(2) ?? '—', a.alcohol?.toFixed(1) ?? '—',
+              a.free_so2?.toFixed(0) ?? '—', a.molecular_so2?.toFixed(2) ?? '—',
+            ];
+            cells.forEach((c, i) => doc.text(T(c), cols[i][1], y));
+            ln();
           });
+          ln(8);
 
+          // Добавки SO₂
           if (this.doses.length) {
-            y += 12;
-            doc.setFont('helvetica', 'bold'); doc.setFontSize(13);
-            doc.text('SO2 doses', margin, y); y += 18;
-            doc.setFont('helvetica', 'normal'); doc.setFontSize(10);
+            doc.setFontSize(13); doc.text(T('История добавок SO₂'), margin, y); ln(18);
+            doc.setFontSize(9);
             this.doses.forEach(d => {
-              const row = `${new Date(d.added_at).toLocaleDateString('ru-RU')}   +${d.so2_added_mg_l ?? '-'} mg/L   ${d.kmbs_dose_g?.toFixed(2) ?? '-'} g KMBS   ${d.reason || ''}`;
-              doc.text(row, margin, y); y += 14;
-              if (y > 760) { doc.addPage(); y = margin; }
+              const row = `${new Date(d.added_at).toLocaleDateString('ru-RU')}   +${d.so2_added_mg_l ?? '—'} мг/л   ${d.kmbs_dose_g?.toFixed(2) ?? '—'} г KMBS   ${this.reasonLabel(d.reason)}`;
+              doc.text(T(row), margin, y, { maxWidth: pageW - 2*margin }); ln();
             });
           }
 
-          doc.save(`sample-${this.sample.sample_code}.pdf`);
+          doc.save(`obrazets-${this.sample.sample_code}.pdf`);
         },
 
         open(id) { location.href = 'sample.html?id=' + encodeURIComponent(id); },

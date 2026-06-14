@@ -95,28 +95,51 @@ async function updateCurrentWinery(patch) {
   return wineries[idx];
 }
 
+// Версия сид-данных. Повышать при изменении seedDemoData, чтобы у тех,
+// кто уже заходил в демо, данные пересоздались с корректными значениями.
+const DEMO_SEED_VERSION = 2;
+
 // Демо-режим — мгновенный вход с сид-данными.
 async function enterDemoMode() {
   const DEMO_EMAIL = 'demo@oxidation73.local';
   const users = _load(STORE_KEYS.users);
   let user = users.find(u => u.email === DEMO_EMAIL);
 
-  if (!user) {
-    const wineryId = _uuid();
-    const userId   = _uuid();
-    const now      = new Date().toISOString();
+  const seedVersion = Number(localStorage.getItem('oxidation73:demo_seed_version') || 0);
+  const needsReseed = !user || seedVersion < DEMO_SEED_VERSION;
 
-    _save(STORE_KEYS.wineries, [..._load(STORE_KEYS.wineries), {
-      id: wineryId, name: 'Винодельня «Демо»', owner_email: DEMO_EMAIL,
-      winery_type: 'estate', subscription_status: 'trial', created_at: now,
-    }]);
+  if (needsReseed) {
+    let wineryId;
+    if (user) {
+      // Демо уже существует, но данные устарели — чистим только демо-винодельню.
+      wineryId = user.winery_id;
+      _purgeWineryData(wineryId);
+    } else {
+      wineryId   = _uuid();
+      const userId = _uuid();
+      const now    = new Date().toISOString();
+      _save(STORE_KEYS.wineries, [..._load(STORE_KEYS.wineries), {
+        id: wineryId, name: 'Винодельня «Демо»', owner_email: DEMO_EMAIL,
+        winery_type: 'estate', subscription_status: 'trial', created_at: now,
+      }]);
+      user = { id: userId, email: DEMO_EMAIL, password: 'demo', winery_id: wineryId, role: 'owner', created_at: now };
+      _save(STORE_KEYS.users, [...users, user]);
+    }
 
-    user = { id: userId, email: DEMO_EMAIL, password: 'demo', winery_id: wineryId, role: 'owner', created_at: now };
-    _save(STORE_KEYS.users, [...users, user]);
-
-    // Сид: образцы и анализы — функция в analyses.js
     if (typeof seedDemoData === 'function') await seedDemoData(wineryId);
+    localStorage.setItem('oxidation73:demo_seed_version', String(DEMO_SEED_VERSION));
   }
+
   _save(STORE_KEYS.session, { userId: user.id, wineryId: user.winery_id, email: user.email });
   location.href = 'dashboard.html';
+}
+
+// Удаляет образцы / анализы / добавки конкретной винодельни (для пересева демо).
+function _purgeWineryData(wineryId) {
+  const samples = _load('oxidation73:samples');
+  const dropIds = new Set(samples.filter(s => s.winery_id === wineryId).map(s => s.id));
+
+  _save('oxidation73:samples',   samples.filter(s => s.winery_id !== wineryId));
+  _save('oxidation73:analyses',  _load('oxidation73:analyses').filter(a => !dropIds.has(a.sample_id)));
+  _save('oxidation73:so2_doses', _load('oxidation73:so2_doses').filter(d => !dropIds.has(d.sample_id)));
 }

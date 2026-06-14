@@ -125,6 +125,13 @@ async function listRecentAnalyses(limit = 10) {
 
 // --- Алерты ------------------------------------------------------------
 
+// Защитный минимум молекулярного SO₂ по типам вин (мг/л).
+// Дублирует so2-logic.js, чтобы алерты считались даже без window.SO2.
+const OXIDATION_FLOORS = {
+  white: 0.5, 'white-sweet': 0.8, red: 0.3,
+  rose: 0.5, sparkling: 0.4, orange: 0.3, 'pet-nat': 0.3,
+};
+
 async function getAlerts() {
   const w = _currentWineryId();
   const samples = _read(DATA_KEYS.samples).filter(s => s.winery_id === w);
@@ -137,14 +144,13 @@ async function getAlerts() {
       .sort((a, b) => new Date(b.analyzed_at) - new Date(a.analyzed_at))[0];
     if (!latest) continue;
 
-    // Риск окисления по молекулярному SO₂
+    // Риск окисления: молекулярный SO₂ ниже защитного минимума для типа вина.
     if (latest.molecular_so2 != null) {
-      const isWhitish = ['white', 'white-sweet', 'rose', 'orange', 'pet-nat', 'sparkling'].includes(sample.wine_type);
-      const threshold = isWhitish ? 0.5 : 0.3;
-      if (latest.molecular_so2 < threshold) {
+      const floor = OXIDATION_FLOORS[sample.wine_type] ?? 0.5;
+      if (latest.molecular_so2 < floor) {
         alerts.push({
           type: 'oxidation', severity: 'red', sample,
-          message: `Молекулярный SO₂ ${latest.molecular_so2.toFixed(2)} мг/л — риск окисления (норма от ${threshold}).`,
+          message: `Молекулярный SO₂ ${latest.molecular_so2.toFixed(2)} мг/л — риск окисления (защитный минимум ${floor.toFixed(1)}).`,
         });
       }
     }
@@ -210,49 +216,55 @@ async function seedDemoData(wineryId) {
     id: _newId(), winery_id: wineryId, sample_code: '2024-CS-01',
     variety: 'Каберне Совиньон', vintage: 2024, wine_type: 'red',
     vessel: 'Дубовая бочка №3', volume_liters: 225, stage: 'aging',
-    notes: 'Малолактика завершена.', created_at: new Date(now - 90*day).toISOString(),
+    notes: 'Малолактика завершена. SO₂ поддерживается на выдержке.',
+    created_at: new Date(now - 90*day).toISOString(),
   };
   const s2 = {
     id: _newId(), winery_id: wineryId, sample_code: '2025-RR-04',
     variety: 'Рислинг', vintage: 2025, wine_type: 'white',
     vessel: 'Бак №7 (нерж.)', volume_liters: 800, stage: 'post-fermentation',
-    notes: 'Холодная стабилизация.', created_at: new Date(now - 30*day).toISOString(),
+    notes: 'Без МЛБ, кислотность сохранена. SO₂ просел — требует подкормки.',
+    created_at: new Date(now - 30*day).toISOString(),
   };
   const s3 = {
     id: _newId(), winery_id: wineryId, sample_code: '2024-OR-02',
     variety: 'Ркацители', vintage: 2024, wine_type: 'orange',
-    vessel: 'Амфора №1', volume_liters: 350, stage: 'aging',
-    notes: 'Мацерация 4 месяца.', created_at: new Date(now - 60*day).toISOString(),
+    vessel: 'Квеври №1', volume_liters: 350, stage: 'aging',
+    notes: 'Мацерация 4 месяца на мезге. Рост летучей кислотности.',
+    created_at: new Date(now - 60*day).toISOString(),
   };
-  _write(DATA_KEYS.samples, [s1, s2, s3]);
+  // Append, не перезаписываем — у пользователя могут быть свои данные.
+  _write(DATA_KEYS.samples, [..._read(DATA_KEYS.samples), s1, s2, s3]);
 
   const mol = (free, ph) => free / (1 + Math.pow(10, ph - 1.81));
-  const mk = (sample_id, daysAgo, ph, free, va, alcohol, ta) => ({
+  // o = необязательные поля { rs, malic, lactic }
+  const mk = (sample_id, daysAgo, ph, free, va, alcohol, ta, o = {}) => ({
     id: _newId(), sample_id,
     analyzed_at: new Date(now - daysAgo*day).toISOString(),
-    ph, free_so2: free, total_so2: free * 2.3, volatile_acidity: va,
-    alcohol, residual_sugar: 1.8, titratable_acidity: ta,
+    ph, free_so2: free, total_so2: Math.round(free * 2.3), volatile_acidity: va,
+    alcohol, residual_sugar: o.rs ?? 1.8, titratable_acidity: ta,
+    malic_acid: o.malic ?? null, lactic_acid: o.lactic ?? null,
     temperature: 14, molecular_so2: mol(free, ph),
     analyst_name: 'Демо-аналитик', created_at: new Date(now - daysAgo*day).toISOString(),
   });
 
-  _write(DATA_KEYS.analyses, [
-    // Каберне — нормальное состояние с лёгким снижением SO₂
-    mk(s1.id, 80, 3.65, 35, 0.42, 13.8, 5.6),
-    mk(s1.id, 60, 3.66, 28, 0.45, 13.8, 5.5),
-    mk(s1.id, 40, 3.68, 22, 0.48, 13.8, 5.4),
-    mk(s1.id, 14, 3.70, 18, 0.55, 13.8, 5.3),  // ← молек. упал, скоро алерт
-    // Рислинг — алерт по молекулярному SO₂ (низкий pH, но free SO₂ просел)
-    mk(s2.id, 20, 3.10, 30, 0.28, 11.5, 7.8),
-    mk(s2.id, 10, 3.12, 22, 0.32, 11.5, 7.7),
-    mk(s2.id,  3, 3.15, 12, 0.35, 11.5, 7.6),  // ← молек. ~0.12 — красный алерт
-    // Оранж — высокая VA, потенциальный алерт
-    mk(s3.id, 50, 3.55, 25, 0.55, 13.2, 5.9),
-    mk(s3.id, 20, 3.58, 22, 0.65, 13.2, 5.8),  // ← VA жёлтый
-    mk(s3.id,  5, 3.60, 20, 0.74, 13.2, 5.7),  // ← VA красный
+  _write(DATA_KEYS.analyses, [..._read(DATA_KEYS.analyses),
+    // Каберне (красное) — ЗДОРОВОЕ: молек. SO₂ держится у 0.55–0.65, МЛБ завершена.
+    mk(s1.id, 80, 3.62, 45, 0.42, 13.8, 5.6, { malic: 0.1, lactic: 1.6 }),  // 0.69
+    mk(s1.id, 55, 3.64, 42, 0.45, 13.8, 5.5, { malic: 0.1, lactic: 1.7 }),  // 0.61
+    mk(s1.id, 30, 3.65, 40, 0.47, 13.8, 5.4, { malic: 0.1, lactic: 1.8 }),  // 0.57
+    mk(s1.id, 10, 3.65, 40, 0.48, 13.8, 5.4, { malic: 0.1, lactic: 1.8 }),  // 0.57 — норма
+    // Рислинг (белое) — ОКИСЛЕНИЕ: свободный SO₂ постепенно упал, молек. ушёл ниже 0.5.
+    mk(s2.id, 25, 3.10, 16, 0.26, 11.5, 7.9, { malic: 2.6 }),  // 0.78 — норма
+    mk(s2.id, 14, 3.12, 11, 0.30, 11.5, 7.8, { malic: 2.5 }),  // 0.51 — на нижней границе
+    mk(s2.id,  3, 3.15, 6,  0.34, 11.5, 7.7, { malic: 2.5 }),  // 0.26 — КРАСНЫЙ алерт окисления
+    // Ркацители (оранж) — ПОРЧА: летучая кислотность растёт выше порога 0.7.
+    mk(s3.id, 50, 3.55, 25, 0.52, 13.2, 5.9),  // 0.56 / VA ok
+    mk(s3.id, 25, 3.58, 22, 0.66, 13.2, 5.8),  // 0.37 / VA жёлтый
+    mk(s3.id,  5, 3.60, 20, 0.78, 13.2, 5.7),  // 0.32 / VA КРАСНЫЙ алерт
   ]);
 
-  _write(DATA_KEYS.doses, [
+  _write(DATA_KEYS.doses, [..._read(DATA_KEYS.doses),
     { id: _newId(), sample_id: s1.id, added_at: new Date(now - 75*day).toISOString(),
       so2_added_mg_l: 20, kmbs_dose_g: (20 * 225) / 570, reason: 'routine',
       notes: 'Плановая защита перед выдержкой.', created_at: new Date(now - 75*day).toISOString() },
